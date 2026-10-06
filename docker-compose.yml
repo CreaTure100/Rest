@@ -1,0 +1,121 @@
+# Запуск:  cp .env .env   (Windows: copy .env .env)  затем  docker compose up --build
+# Сайт: http://localhost:${WEB_PORT:-8080}   API: http://localhost:${API_PORT:-3001}/api/health
+name: restoran
+
+x-pg-healthcheck: &pg-healthcheck
+  test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+  interval: 5s
+  timeout: 5s
+  retries: 12
+  start_period: 10s
+
+x-backend-healthcheck: &backend-healthcheck
+  test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3001/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+  interval: 10s
+  timeout: 5s
+  retries: 10
+  start_period: 40s   # время на миграции и seed
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?Задайте POSTGRES_USER в .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Задайте POSTGRES_PASSWORD в .env}
+      POSTGRES_DB: ${POSTGRES_DB:-restaurant}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck: *pg-healthcheck
+
+  backend:
+    build: { context: ., target: backend }
+    restart: unless-stopped
+    depends_on:
+      db: { condition: service_healthy }
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      PORT: 3001
+      # если в пароле есть спецсимволы (@ : / #), закодируйте их в URL
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-restaurant}
+      JWT_SECRET: ${JWT_SECRET:?Задайте JWT_SECRET в .env}
+      REFRESH_SECRET: ${REFRESH_SECRET:?Задайте REFRESH_SECRET в .env}
+      ACCESS_TOKEN_TTL: ${ACCESS_TOKEN_TTL:-45m}
+      REFRESH_TOKEN_TTL: ${REFRESH_TOKEN_TTL:-1d}
+      RESTAURANT_TZ: ${RESTAURANT_TZ:-Europe/Moscow}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+      TRUST_PROXY: 1
+      RUN_SEED: ${RUN_SEED:-true}
+    ports:
+      - "${API_PORT:-3001}:3001"
+    healthcheck: *backend-healthcheck
+
+  frontend:
+    build: { context: ., target: frontend }
+    restart: unless-stopped
+    depends_on:
+      backend: { condition: service_healthy }
+    ports:
+      - "${WEB_PORT:-8080}:80"
+
+  # ---------- Тесты: docker compose --profile test run --rm tests ----------
+  db-test:
+    profiles: [test]
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: test
+      POSTGRES_PASSWORD: test
+      POSTGRES_DB: restaurant_test
+    tmpfs: [/var/lib/postgresql/data]
+    healthcheck: *pg-healthcheck
+
+  tests:
+    profiles: [test]
+    build: { context: ., target: test }
+    depends_on:
+      db-test: { condition: service_healthy }
+    environment:
+      NODE_ENV: test
+      TEST_DATABASE_URL: postgres://test:test@db-test:5432/restaurant_test
+
+  # ---------- Нагрузка (отдельная БД!): docker compose --profile load run --rm k6 run /scripts/load.js ----------
+  db-load:
+    profiles: [load]
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: load
+      POSTGRES_PASSWORD: load
+      POSTGRES_DB: restaurant_load
+    tmpfs: [/var/lib/postgresql/data]
+    healthcheck: *pg-healthcheck
+
+  backend-load:
+    profiles: [load]
+    build: { context: ., target: backend }
+    depends_on:
+      db-load: { condition: service_healthy }
+    environment:
+      NODE_ENV: development
+      PORT: 3001
+      DATABASE_URL: postgres://load:load@db-load:5432/restaurant_load
+      JWT_SECRET: ${JWT_SECRET:?Задайте JWT_SECRET в .env}
+      REFRESH_SECRET: ${REFRESH_SECRET:?Задайте REFRESH_SECRET в .env}
+      RUN_SEED: "true"
+      RATE_LIMIT_ENABLED: "false"   # иначе лимит входа исказит результаты
+      LOG_REQUESTS: "false"
+      DB_POOL_MAX: 20
+    healthcheck: *backend-healthcheck
+
+  k6:
+    profiles: [load]
+    image: grafana/k6:latest
+    depends_on:
+      backend-load: { condition: service_healthy }
+    environment:
+      BASE_URL: http://backend-load:3001
+    volumes:
+      - ./tests/load:/scripts:ro
+    command: ["run", "/scripts/smoke.js"]
+
+volumes:
+  pgdata:

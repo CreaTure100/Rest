@@ -1,0 +1,10 @@
+node_modules
+dist
+coverage
+*.tar
+*.tar.gz
+*.zip
+restoran.tar
+*.log
+.DS_Store
+tests/load/results

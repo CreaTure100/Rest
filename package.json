@@ -1,0 +1,66 @@
+{
+  "name": "table_one",
+  "private": true,
+  "version": "2.0.0",
+  "description": "Ресторан: бронирование столиков, заказы, кухня (React + Express + PostgreSQL)",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "dev": "vite",
+    "dev:server": "node --watch server.js",
+    "dev:all": "concurrently -n api,web -c blue,green \"npm:dev:server\" \"npm:dev\"",
+    "build": "vite build",
+    "build:ghpages": "vite build --mode ghpages",
+    "preview": "vite preview",
+    "lint": "eslint .",
+    "server": "node server.js",
+    "start": "node scripts/db-init.js && node server.js",
+
+    "db:migrate": "knex migrate:latest",
+    "db:rollback": "knex migrate:rollback",
+    "db:seed": "knex seed:run",
+    "db:init": "node scripts/db-init.js",
+    "db:reset": "knex migrate:rollback --all && knex migrate:latest && knex seed:run",
+
+    "test": "node scripts/run-tests.js unit",
+    "test:unit": "node scripts/run-tests.js unit",
+    "test:watch": "node scripts/run-tests.js unit --watch",
+    "test:coverage": "node scripts/run-tests.js unit --coverage",
+    "test:integration": "node scripts/run-tests.js integration",
+    "test:all": "node scripts/run-tests.js all",
+
+    "load:smoke": "k6 run tests/load/smoke.js",
+    "load:full": "k6 run tests/load/load.js",
+    "load:race": "k6 run tests/load/booking-race.js",
+
+    "predeploy": "npm run build:ghpages",
+    "deploy": "gh-pages -d dist"
+  },
+  "dependencies": {
+    "axios": "^1.13.6",
+    "bcrypt": "^6.0.0",
+    "cors": "^2.8.6",
+    "dotenv": "^16.4.5",
+    "express": "^5.2.1",
+    "express-rate-limit": "^8.0.0",
+    "helmet": "^8.0.0",
+    "jsonwebtoken": "^9.0.3",
+    "knex": "^3.1.0",
+    "pg": "^8.13.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^7.13.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.13.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.3",
+    "concurrently": "^9.0.0",
+    "eslint": "^9.13.0",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "eslint-plugin-react-refresh": "^0.4.14",
+    "gh-pages": "^6.3.0",
+    "globals": "^15.11.0",
+    "vite": "^5.4.10"
+  }
+}
