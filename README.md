@@ -67,9 +67,3 @@ src/                   React-приложение (api/, components/, pages/, ut
 tests/                 unit/, integration/, helpers/, load/ (k6)
 docker/nginx.conf, Dockerfile, docker-compose.yml, .env.example
 ```
-
-## Изменения API (обратная совместимость)
-
-Маршруты и формат ответов сохранены. Отличия: `POST /orders` принимает `book: true` (бронь и заказ одной транзакцией);
-`GET /orders` для клиента возвращает только его заказы; `GET /tables` и `POST /tables/:id/book` принимают необязательную `date`;
-токенные ошибки отдают 401 (а не 403); конфликты бронирования - 409; `DELETE /menu/:id` скрывает блюдо, а не стирает запись.
